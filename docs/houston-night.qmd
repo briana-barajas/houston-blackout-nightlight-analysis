@@ -136,7 +136,7 @@ income <- income_layer_raw %>% select(B19013e1, GEOID) %>% #filter
          median_income = B19013e1) 
 
 # filter and reproject Census tract layer 
-tract_layer_raw <- tract_layer_raw %>% 
+tract <- tract_layer_raw %>% 
   select(GEOID_Data, NAMELSAD) %>% 
   rename(census_tract = NAMELSAD) %>% 
   st_transform(crs = "EPSG:3083") #reproject 
@@ -212,24 +212,17 @@ glue::glue("Number of homes in blackout areas: {nrow(bo_homes)}")
 The final step is to assign socioeconomic data to the 157410 homes in the Houston area that have experienced blackouts.
 
 ```{r}
-# join income and geom data
-inc_tract_joined <- inner_join(tract_layer_raw, income, by = "GEOID_Data")
+# join income and census geom data
+inc_tract_joined <- inner_join(tract, income, by = "GEOID_Data")
 
-# calculate mean income for each census tract
-inc_tract_joined <- inc_tract_joined %>% 
-  group_by(census_tract) %>% 
+# calculate mean median income for each census tract
+inc_tract_joined <- inc_tract_joined %>%
+  group_by(census_tract) %>%
   summarise(median_income = mean(median_income, na.rm = TRUE))
 
+# spatially join home home data with census data
+#full_bo_data <- st_filter(x = bo_homes, y = inc_tract_joined, .predicate = st_intersects)
+
 # count number of census tracts that were impacted
-glue::glue('Number of impacted census tracts: {nrow(inc_tract_joined)}')
-```
-
-##### determine which census tracts experienced blackouts (10 points)
-
-**Census tract number off by 1 due to missed buildings in sequel query**
-
-```{r}
-# join income and census tract data
-
-# group census groups into a single row
+#glue::glue('Number of impacted census tracts: {nrow(full_bo_data)}')
 ```
