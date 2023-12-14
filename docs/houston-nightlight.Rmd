@@ -4,7 +4,6 @@ author: "Briana Barajas"
 date: "`r Sys.Date()`"
 output:
     html_document:
-      print_df: paged
       toc: yes
       toc_depth: 4
       toc_float: yes
@@ -27,7 +26,7 @@ library(gridExtra)
 library(here)
 ```
 
-## Background
+## Background (print_df: paged)
 
 In February 2021, severe winter storms in the United States caused a major power outage in the state of Texas. The loss of power resulted in over 4.5 million homes and businesses left without power, and several deaths.[^1] This analysis uses remotely sensed night light data to assess the impact and distribution of these blackouts. Data from the U.S. Census Bureau will be added to investigate if socioeconomic factors affect the recovery of power within the community.
 
@@ -41,16 +40,6 @@ Data on the distribution of artificial night over the Houston area was acquired 
 
 [^2]: <https://developers.google.com/earth-engine/datasets/catalog/NOAA_VIIRS_001_VNP46A1>
 
-```{r, results='hide', echo = TRUE}
-# load rasters from Houston tiles on 2021-02-07 (h5 unlabeled)
-night_tile7 <- read_stars(here('data/VNP46A1/VNP46A1.A2021038.h08v05.001.2021039064328.tif'))
-night_tile7_h6 <- read_stars(here('data/VNP46A1/VNP46A1.A2021038.h08v06.001.2021039064329.tif'))
-
-# load rasters from Houston tiles on 2021-02-16 (h5 unlabeled)
-night_tile16 <- read_stars(here('data/VNP46A1/VNP46A1.A2021047.h08v05.001.2021048091106.tif'))
-night_tile16_h6 <- read_stars(here('data/VNP46A1/VNP46A1.A2021047.h08v06.001.2021048091105.tif'))
-```
-
 ### Road and Home Data
 
 Vehicles produce a large portion of night lights that are detected via remote sensing. Removing areas near highways from this analysis can decrease the chance of falsely identifying areas with low traffic as blackout zones. Data on highways was accessed through [Geofabrik](https://download.geofabrik.de/), and collected by [OpenStreetMap (OSM)](https://planet.openstreetmap.org/). Geobrik also cleans and provides OpenStreetMap(OSM) data on homes. This data was used to find the number of homes impacted by the blackouts.\
@@ -59,55 +48,89 @@ Vehicles produce a large portion of night lights that are detected via remote se
 
 Data on individual homes is not available, but socioeconomic information from the [U.S. Census Bureau](https://www.census.gov/programs-surveys/acs) provides income information within census tracts. The census data will be useful for estimating the average income for homes impacted by the blackouts.
 
+## Data Reading & Preparation
+
+### Night Light
+
+Night light data from NASA is distributed as 10x10 degree tiles. In order to capture all of the Houston area, there are two tiles from each night of interest.
+
+```{r, results = 'hide'}
+# read in Houston tiles from 2021-02-07 
+night_tile7_h5 <- read_stars(here('data/VNP46A1/VNP46A1.A2021038.h08v05.001.2021039064328.tif'))
+night_tile7_h6 <- read_stars(here('data/VNP46A1/VNP46A1.A2021038.h08v06.001.2021039064329.tif'))
+
+# read in Houston tiles from 2021-02-16
+night_tile16_h5 <- read_stars(here('data/VNP46A1/VNP46A1.A2021047.h08v05.001.2021048091106.tif'))
+night_tile16_h6 <- read_stars(here('data/VNP46A1/VNP46A1.A2021047.h08v06.001.2021048091105.tif'))
+
+# combine data tiles
+night_tile7 <- st_mosaic(night_tile7_h5, night_tile7_h6)
+night_tile16 <- st_mosaic(night_tile16_h5, night_tile16_h6)
+
+# remove uncombined tiles from env
+rm(night_tile7_h5, night_tile7_h6, night_tile16_h5, night_tile16_h6)
+```
+
+### SQL Query - Home and Road Data
+
+Standard Query Language, or SQL, was used to define parameters for filtering home and road data as it was read in. For the home search, buildings identified as residential, apartments, house, static caravans, or detached were included.
+
+House data:
+
+```{r, results='hide'}
+#store query (data selection)
+query1 <- "SELECT * FROM gis_osm_buildings_a_free_1 WHERE (type IS NULL AND name IS NULL) OR type in ('residential', 'apartments', 'house', 'static_caravan', 'detached')"
+
+# read in data using query to filter
+homes_raw <- st_read(here("data/gis_osm_buildings_a_free_1.gpkg"), query = query1)
+
+# reproject data
+homes_raw <- st_transform(homes_raw, crs = "EPSG:3083")
+
+# map night lights from both nights
+plot(night_tile7, main = "Feburary 7", axes = TRUE) 
+plot(night_tile16, main = "February 16", axes = TRUE)
+```
+
+Road data:
+
+```{r}
+# define query (data selection)
+query <- "SELECT * FROM gis_osm_roads_free_1 WHERE fclass='motorway'"
+
+#load in data
+highway_raw <- st_read(here("data/gis_osm_roads_free_1.gpkg"), query = query)
+
+# remove queries from environment
+rm(query, query1)
+```
+
+## Finding Blackout Locations
+
+By examining the change in night light intensity, we can potentially uncover areas where the storms affected power supply. For this analysis, blackout areas will be defined as areas that experienced a drop of more than 200 nW cm^-2^sr^-1^.
+
+```{r}
+# find the change in night light intensity
+light_diff <- (night_tile7 - night_tile16)
+
+# reclassify raster to define areas with and without blackouts
+light_diff_reclassified <- cut(x = light_diff, 
+                               breaks = c(-Inf, 200, Inf), #200 as blackout cutoff value
+                      labels = c("No Blackout", "Blackout"))
+
+# assign NAs to non-blackout areas
+light_diff_reclassified[light_diff_reclassified == "No Blackout"] <- NA
+
+plot(light_diff_reclassified, main = "Blackouts", axes = TRUE, col = c("aliceblue", "darkblue")) 
+```
+
 #### Find locations of blackouts
-
-For improved computational efficiency and easier interoperability with `sf`, I recommend using the `stars` package for raster handling.
-
-##### combine the data (5 points)
-
--   read in night lights tiles
-
--   combine tiles into a single `stars` object for each date (2021-02-07 and 2021-02-16). Hint: use `st_mosaic`
-
-    ```{r}
-    # combine tiles using st_mosaic, 2 tiles per night
-    night_tile7 <- st_mosaic(night_tile7, night_tile7_h6)
-    night_tile16 <- st_mosaic(night_tile16, night_tile16_h6)
-    ```
 
 ##### create a blackout mask (10 points)
 
 -   find the change in night lights intensity (presumably) caused by the storm
 
-    ```{r, eval = FALSE}
-    # View initial plots
-    plot(night_tile7, main = "Feburary 7", axes = TRUE) 
-    plot(night_tile16, main = "February 16", axes = TRUE)
-    ```
-
-    ```{r}
-    #find the change in night light intensity
-    light_diff <- (night_tile7 - night_tile16)
-    ```
-
-    ```{r, eval = FALSE}
-    # plot to compare to initial plots
-    plot(light_diff, main = "Change in Night Light Intensity", axes = TRUE)
-    ```
-
 -   reclassify the difference raster, assuming that any location that experienced a drop of more than 200 nW cm^-2^sr^-1^ experienced a blackout
-
-    ```{r}
-    # reclassify difference raster using the 200 marker as a break
-    light_diff_reclassified <- cut(x = light_diff, breaks = c(-Inf, 200, Inf),
-                          labels = c("No Blackout", "Blackout")) #labels 
-    ```
-
-    ```{r, eval = FALSE}
-    plot(light_diff_reclassified, main = "Blackouts", axes = TRUE, col = c("aliceblue", "darkblue"))
-    ```
-
-    **Note:** I was initially trying to use `raster::reclassify()` in order to complete this but found it was not working. After some digging, I found that the `reclassify()` function was not working because the rasters have object class `stars`. I started looking for a similar function within the `stars` package, and found the `cut()` function, which was listed as an alternative to `reclassify()` in the `raster` package documentation. I am assuming this is some dependency.
 
 -   assign `NA` to all locations that experienced a drop of *less* than 200 nW cm^-2^sr^-1^
 
@@ -115,7 +138,7 @@ For improved computational efficiency and easier interoperability with `sf`, I r
     #made a copy to preserve initial difference & compare for self-check
     light_diff_rcl_copy <- light_diff_reclassified
 
-    light_diff_rcl_copy[light_diff_rcl_copy == "No Blackout"] <- NA #assign values to NA
+     #assign values to NA
     ```
 
     ```{r}
