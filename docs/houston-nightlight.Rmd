@@ -1,5 +1,5 @@
 ---
-title: 'EDS 223: assignment 3'
+title: 'Assessing Inequities During 2021 Houston Blackout'
 author: "Briana Barajas"
 date: "`r Sys.Date()`"
 output:
@@ -8,19 +8,31 @@ output:
       toc: yes
       toc_depth: 4
       toc_float: yes
+format: 
+  html:
+    code-fold: true
+    code-summary: "View Code"  
 ---
 
-**Good stylistically**
-
 ```{r setup, include=FALSE}
-knitr::opts_chunk$set(echo = TRUE)
+knitr::opts_chunk$set(echo = TRUE, warning = FALSE, message = FALSE)
 ```
 
-## Overview
+## Background
 
-"In February 2021, the state of Texas suffered a major power crisis, which came about as a result of three severe winter storms sweeping across the United States on February 10--11, 13--17, and 15--20."[^1] For more background, check out these [engineering](https://www.youtube.com/watch?v=08mwXICY4JM&ab_channel=PracticalEngineering) and [political](https://www.youtube.com/watch?v=Zcrsgdl_hP0&ab_channel=Vox) perspectives.
+In February 2021, severe winter storms in the United States caused a major power outage in the state of Texas. The loss of power resulted in over 4.5 million homes and business left without power, and several deaths.[^1] This analysis uses remotely-sensed night light data to assess the impact and distribution of these blackouts. Data from the U.S. Census Bureau will be added in order to investigate if socioeconomic factors affect recovery of power within the community.
 
-[^1]: Wikipedia. 2021. "2021 Texas power crisis." Last modified October 2, 2021. <https://en.wikipedia.org/wiki/2021_Texas_power_crisis>.
+[^1]: <https://en.wikipedia.org/wiki/2021_Texas_power_crisis>
+
+## About the Data
+
+### Night Light Data
+
+Data on the distribution of artificial night over the Houston area was acquired from the Visible Infrared Imaging Radiometer Suite (VIIRS).
+
+"In February 2021, the state of Texas suffered a major power crisis, which came about as a result of three severe winter storms sweeping across the United States on February 10--11, 13--17, and 15--20."[^2] For more background, check out these [engineering](https://www.youtube.com/watch?v=08mwXICY4JM&ab_channel=PracticalEngineering) and [political](https://www.youtube.com/watch?v=Zcrsgdl_hP0&ab_channel=Vox) perspectives.
+
+[^2]: Wikipedia. 2021. "2021 Texas power crisis." Last modified October 2, 2021. <https://en.wikipedia.org/wiki/2021_Texas_power_crisis>.
 
 For this assignment, you are tasked with:\
 - estimating the number of homes in Houston that lost power as a result of the first two storms\
@@ -78,7 +90,7 @@ The geodatabase contains a layer holding the geometry information, separate from
 
 ## Assignment
 
-### ⭐  Note on Self-Checks ⭐ 
+### ⭐ Note on Self-Checks ⭐
 
 Throughout my code I included a few code chunks where `eval = FALSE`, these are some self-checks with longer outputs such as plots, viewing data, or viewing the CRS. Any chunks that appear to have not run were intentional. Additionally, I have some handwritten notes that I'll add to the .Rproj titled `self-check-written`.
 
@@ -86,12 +98,13 @@ Throughout my code I included a few code chunks where `eval = FALSE`, these are 
 
 Load necessary libraries:
 
-```{r, warning=FALSE, message=FALSE}
+```{r, results='hide'}
 library(tidyverse)
 library(stars)
 library(sf)
 library(ggspatial)
 library(gridExtra)
+library(here)
 ```
 
 #### Find locations of blackouts
@@ -102,14 +115,14 @@ For improved computational efficiency and easier interoperability with `sf`, I r
 
 -   read in night lights tiles
 
-    ```{r, warning=FALSE, message=FALSE}
+    ```{r, results='hide'}
     # load rasters from Houston tiles on 2021-02-07 (h5 unlabeled)
-    night_tile7 <- read_stars('data/VNP46A1/VNP46A1.A2021038.h08v05.001.2021039064328.tif')
-    night_tile7_h6 <- read_stars('data/VNP46A1/VNP46A1.A2021038.h08v06.001.2021039064329.tif')
+    night_tile7 <- read_stars(here('data/VNP46A1/VNP46A1.A2021038.h08v05.001.2021039064328.tif'))
+    night_tile7_h6 <- read_stars(here('data/VNP46A1/VNP46A1.A2021038.h08v06.001.2021039064329.tif'))
 
     # load rasters from Houston tiles on 2021-02-16 (h5 unlabeled)
-    night_tile16 <- read_stars('data/VNP46A1/VNP46A1.A2021047.h08v05.001.2021048091106.tif')
-    night_tile16_h6 <- read_stars('data/VNP46A1/VNP46A1.A2021047.h08v06.001.2021048091105.tif')
+    night_tile16 <- read_stars(here('data/VNP46A1/VNP46A1.A2021047.h08v05.001.2021048091106.tif'))
+    night_tile16_h6 <- read_stars(here('data/VNP46A1/VNP46A1.A2021047.h08v06.001.2021048091105.tif'))
     ```
 
 -   combine tiles into a single `stars` object for each date (2021-02-07 and 2021-02-16). Hint: use `st_mosaic`
@@ -296,7 +309,7 @@ The roads geopackage includes data on roads other than highways. However, we can
     query <- "SELECT * FROM gis_osm_roads_free_1 WHERE fclass='motorway'"
 
     #load in data
-    highway_raw <- st_read("data/gis_osm_roads_free_1.gpkg", query = query)
+    highway_raw <- st_read(here("data/gis_osm_roads_free_1.gpkg"), query = query)
     ```
 
 -   reproject data to EPSG:3083
@@ -349,7 +362,7 @@ The roads geopackage includes data on roads other than highways. However, we can
     query1 <- "SELECT * FROM gis_osm_buildings_a_free_1 WHERE (type IS NULL AND name IS NULL) OR type in ('residential', 'apartments', 'house', 'static_caravan', 'detatch')"
 
     # read in data using query to filter
-    homes_raw <- st_read("data/gis_osm_buildings_a_free_1.gpkg", query = query1)
+    homes_raw <- st_read(here("data/gis_osm_buildings_a_free_1.gpkg"), query = query1)
 
     #change the CRS
     homes_raw <- st_transform(homes_raw, crs = "EPSG:3083")
@@ -385,7 +398,7 @@ The roads geopackage includes data on roads other than highways. However, we can
 
     ```{r}
     #store file path to geodatabase layers
-    path <- "data/ACS_2019_5YR_TRACT_48_TEXAS.gdb"
+    path <- here("data/ACS_2019_5YR_TRACT_48_TEXAS.gdb")
     ```
 
     ```{r, eval = FALSE}
