@@ -1487,15 +1487,21 @@ Blackout</h1>
 </div>
 
 
+<pre class="r"><code>library(tidyverse)
+library(stars)
+library(sf)
+library(ggspatial)
+library(gridExtra)
+library(here)</code></pre>
 <div id="background" class="section level2">
 <h2>Background</h2>
 <p>In February 2021, severe winter storms in the United States caused a
 major power outage in the state of Texas. The loss of power resulted in
-over 4.5 million homes and business left without power, and several
+over 4.5 million homes and businesses left without power, and several
 deaths.<a href="#fn1" class="footnote-ref" id="fnref1"><sup>1</sup></a>
-This analysis uses remotely-sensed night light data to assess the impact
+This analysis uses remotely sensed night light data to assess the impact
 and distribution of these blackouts. Data from the U.S. Census Bureau
-will be added in order to investigate if socioeconomic factors affect
+will be added to investigate if socioeconomic factors affect the
 recovery of power within the community.</p>
 </div>
 <div id="about-the-data" class="section level2">
@@ -1503,148 +1509,40 @@ recovery of power within the community.</p>
 <div id="night-light-data" class="section level3">
 <h3>Night Light Data</h3>
 <p>Data on the distribution of artificial night over the Houston area
-was acquired from the Visible Infrared Imaging Radiometer Suite
-(VIIRS).</p>
-<p>“In February 2021, the state of Texas suffered a major power crisis,
-which came about as a result of three severe winter storms sweeping
-across the United States on February 10–11, 13–17, and 15–20.”<a href="#fn2" class="footnote-ref" id="fnref2"><sup>2</sup></a> For more
-background, check out these <a href="https://www.youtube.com/watch?v=08mwXICY4JM&amp;ab_channel=PracticalEngineering">engineering</a>
-and <a href="https://www.youtube.com/watch?v=Zcrsgdl_hP0&amp;ab_channel=Vox">political</a>
-perspectives.</p>
-<p>For this assignment, you are tasked with:<br />
-- estimating the number of homes in Houston that lost power as a result
-of the first two storms<br />
-- investigating if socioeconomic factors are predictors of communities
-recovery from a power outage</p>
-<p>Your analysis will be based on remotely-sensed night lights data,
-acquired from the <a href="https://en.wikipedia.org/wiki/Visible_Infrared_Imaging_Radiometer_Suite">Visible
-Infrared Imaging Radiometer Suite (VIIRS)</a> onboard the Suomi
-satellite. In particular, you will use the VNP46A1 to detect differences
-in night lights before and after the storm to identify areas that lost
-electric power.</p>
-<p>To determine the number of homes that lost power, you link (spatially
-join) these areas with <a href="https://www.openstreetmap.org/#map=4/38.01/-95.84">OpenStreetMap</a>
-data on buildings and roads.</p>
-<p>To investigate potential socioeconomic factors that influenced
-recovery, you will link your analysis with data from the US Census
-Bureau.</p>
-<div id="learning-objectives" class="section level5">
-<h5>Learning objectives:</h5>
-<ul>
-<li>load vector/raster data<br />
-</li>
-<li>simple raster operations<br />
-</li>
-<li>simple vector operations<br />
-</li>
-<li>spatial joins</li>
-</ul>
+was acquired from the Visible Infrared Imaging Radiometer Suite (VIIRS)
+sensor, which is aboard the Suomi satellite. VNP46A1 will be used to
+visualize the difference in night light.<a href="#fn2" class="footnote-ref" id="fnref2"><sup>2</sup></a> This data is available
+through NASA’s <a href="https://ladsweb.modaps.eosdis.nasa.gov/">Level-1
+and Atmospheric Archive &amp; Distribution System Distributed Active
+Archive Center (LAADS DAAC)</a>. Remote sensing images from 2021-02-07
+and 2021-02-16 were selected, as this data was collected before and
+after the storm, and there is minimal cloud cover.</p>
+<pre class="r"><code># load rasters from Houston tiles on 2021-02-07 (h5 unlabeled)
+night_tile7 &lt;- read_stars(here(&#39;data/VNP46A1/VNP46A1.A2021038.h08v05.001.2021039064328.tif&#39;))
+night_tile7_h6 &lt;- read_stars(here(&#39;data/VNP46A1/VNP46A1.A2021038.h08v06.001.2021039064329.tif&#39;))
+
+# load rasters from Houston tiles on 2021-02-16 (h5 unlabeled)
+night_tile16 &lt;- read_stars(here(&#39;data/VNP46A1/VNP46A1.A2021047.h08v05.001.2021048091106.tif&#39;))
+night_tile16_h6 &lt;- read_stars(here(&#39;data/VNP46A1/VNP46A1.A2021047.h08v06.001.2021048091105.tif&#39;))</code></pre>
 </div>
-</div>
-<div id="data" class="section level3">
-<h3>Data</h3>
-<div id="night-lights" class="section level4">
-<h4>Night lights</h4>
-<p>Use NASA’s Worldview to explore the data around the day of the storm.
-There are several days with too much cloud cover to be useful, but
-2021-02-07 and 2021-02-16 provide two clear, contrasting images to
-visualize the extent of the power outage in Texas.</p>
-<p>VIIRS data is distributed through NASA’s <a href="https://ladsweb.modaps.eosdis.nasa.gov/">Level-1 and Atmospheric
-Archive &amp; Distribution System Distributed Active Archive Center
-(LAADS DAAC)</a>. Many NASA Earth data products are distributed in 10x10
-degree tiles in sinusoidal equal-area projection. Tiles are identified
-by their horizontal and vertical position in the grid. Houston lies on
-the border of tiles h08v05 and h08v06. We therefore need to download two
-tiles per date.</p>
-<p>As you’re learning in EDS 220, accessing, downloading, and preparing
-remote sensing data is a skill in it’s own right! To prevent this
-assignment from being a large data wrangling challenge, we have
-downloaded and prepped the following files for you to work with, stored
-in the <code>VNP46A1</code> folder.<br />
+<div id="road-and-home-data" class="section level3">
+<h3>Road and Home Data</h3>
+<p>Vehicles produce a large portion of night lights that are detected
+via remote sensing. Removing areas near highways from this analysis can
+decrease the chance of falsely identifying areas with low traffic as
+blackout zones. Data on highways was accessed through <a href="https://download.geofabrik.de/">Geofabrik</a>, and collected by <a href="https://planet.openstreetmap.org/">OpenStreetMap (OSM)</a>.
+Geobrik also cleans and provides OpenStreetMap(OSM) data on homes. This
+data was used to find the number of homes impacted by the
+blackouts.<br />
 </p>
-<ul>
-<li><code>VNP46A1.A2021038.h08v05.001.2021039064328.h5.tif</code>: tile
-h08v05, collected on 2021-02-07<br />
-</li>
-<li><code>VNP46A1.A2021038.h08v06.001.2021039064329.h5.tif</code>: tile
-h08v06, collected on 2021-02-07<br />
-</li>
-<li><code>VNP46A1.A2021047.h08v05.001.2021048091106.h5.tif</code>: tile
-h08v05, collected on 2021-02-16<br />
-</li>
-<li><code>VNP46A1.A2021047.h08v06.001.2021048091105.h5.tif</code>: tile
-h08v06, collected on 2021-02-16</li>
-</ul>
 </div>
-<div id="roads" class="section level4">
-<h4>Roads</h4>
-<p>Typically highways account for a large portion of the night lights
-observable from space (see Google’s <a href="https://earth.google.com/web/@27.44405464,-84.7693044,206.63660162a,8916361.52264659d,35y,0h,0t,0r/data=CiQSIhIgMGY3ZTJkYzdlOGExMTFlNjk5MGQ2ZjgxOGQ2OWE2ZTc">Earth
-at Night</a>). To minimize falsely identifying areas with reduced
-traffic as areas without power, we will ignore areas near highways.</p>
-<p><a href="https://planet.openstreetmap.org/">OpenStreetMap (OSM)</a>
-is a collaborative project which creates publicly available geographic
-data of the world. Ingesting this data into a database where it can be
-subsetted and processed is a large undertaking. Fortunately, third party
-companies redistribute OSM data. We used <a href="https://download.geofabrik.de/">Geofabrik’s download sites</a> to
-retrieve a shapefile of all highways in Texas and prepared a Geopackage
-(<code>.gpkg</code> file) containing just the subset of roads that
-intersect the Houston metropolitan area. </p>
-<ul>
-<li><code>gis_osm_roads_free_1.gpkg</code></li>
-</ul>
-</div>
-<div id="houses" class="section level4">
-<h4>Houses</h4>
-<p>We can also obtain building data from OpenStreetMap. We again
-downloaded from Geofabrick and prepared a GeoPackage containing only
-houses in the Houston metropolitan area.<br />
-</p>
-<ul>
-<li><code>gis_osm_buildings_a_free_1.gpkg</code></li>
-</ul>
-</div>
-<div id="socioeconomic" class="section level4">
-<h4>Socioeconomic</h4>
-<p>We cannot readily get socioeconomic information for every home, so
-instead we obtained data from the <a href="https://www.census.gov/programs-surveys/acs">U.S. Census Bureau’s
-American Community Survey</a> for census tracts in 2019. The
-<em>folder</em> <code>ACS_2019_5YR_TRACT_48.gdb</code> is an ArcGIS <a href="https://desktop.arcgis.com/en/arcmap/latest/manage-data/administer-file-gdbs/file-geodatabases.htm">“file
-geodatabase”</a>, a multi-file proprietary format that’s roughly
-analogous to a GeoPackage file.<br />
-</p>
-<p>You can use <code>st_layers()</code> to explore the contents of the
-geodatabase. Each layer contains a subset of the fields documents in the
-<a href="https://www2.census.gov/geo/docs/maps-data/data/tiger/prejoined/ACSMetadata2011.txt">ACS
-metadata</a>.<br />
-</p>
-<p>The geodatabase contains a layer holding the geometry information,
-separate from the layers holding the ACS attributes. You have to combine
-the geometry with the attributes to get a feature layer that
-<code>sf</code> can use.</p>
-</div>
-</div>
-</div>
-<div id="assignment" class="section level2">
-<h2>Assignment</h2>
-<div id="note-on-self-checks" class="section level3">
-<h3>⭐ Note on Self-Checks ⭐</h3>
-<p>Throughout my code I included a few code chunks where
-<code>eval = FALSE</code>, these are some self-checks with longer
-outputs such as plots, viewing data, or viewing the CRS. Any chunks that
-appear to have not run were intentional. Additionally, I have some
-handwritten notes that I’ll add to the .Rproj titled
-<code>self-check-written</code>.</p>
-</div>
-<div id="analysis-preparation" class="section level3">
-<h3>Analysis Preparation</h3>
-<p>Load necessary libraries:</p>
-<pre class="r"><code>library(tidyverse)
-library(stars)
-library(sf)
-library(ggspatial)
-library(gridExtra)
-library(here)</code></pre>
+<div id="socioeconomic-data" class="section level3">
+<h3>Socioeconomic Data</h3>
+<p>Data on individual homes is not available, but socioeconomic
+information from the <a href="https://www.census.gov/programs-surveys/acs">U.S. Census
+Bureau</a> provides income information within census tracts. The census
+data will be useful for estimating the average income for homes impacted
+by the blackouts.</p>
 <div id="find-locations-of-blackouts" class="section level4">
 <h4>Find locations of blackouts</h4>
 <p>For improved computational efficiency and easier interoperability
@@ -1653,14 +1551,7 @@ for raster handling.</p>
 <div id="combine-the-data-5-points" class="section level5">
 <h5>combine the data (5 points)</h5>
 <ul>
-<li><p>read in night lights tiles</p>
-<pre class="r"><code># load rasters from Houston tiles on 2021-02-07 (h5 unlabeled)
-night_tile7 &lt;- read_stars(here(&#39;data/VNP46A1/VNP46A1.A2021038.h08v05.001.2021039064328.tif&#39;))
-night_tile7_h6 &lt;- read_stars(here(&#39;data/VNP46A1/VNP46A1.A2021038.h08v06.001.2021039064329.tif&#39;))
-
-# load rasters from Houston tiles on 2021-02-16 (h5 unlabeled)
-night_tile16 &lt;- read_stars(here(&#39;data/VNP46A1/VNP46A1.A2021047.h08v05.001.2021048091106.tif&#39;))
-night_tile16_h6 &lt;- read_stars(here(&#39;data/VNP46A1/VNP46A1.A2021047.h08v06.001.2021048091105.tif&#39;))</code></pre></li>
+<li><p>read in night lights tiles</p></li>
 <li><p>combine tiles into a single <code>stars</code> object for each
 date (2021-02-07 and 2021-02-16). Hint: use <code>st_mosaic</code></p>
 <pre class="r"><code># combine tiles using st_mosaic, 2 tiles per night
@@ -2034,6 +1925,15 @@ nights does not tell us about potential disparities regarding emergency
 resource distribution, blackout length, or individual impacts.</p></li>
 </ul>
 </div>
+<div id="learning-objectives" class="section level5">
+<h5>Learning objectives:</h5>
+<ul>
+<li>load vector/raster data</li>
+<li>simple raster operations</li>
+<li>simple vector operations</li>
+<li>spatial joins</li>
+</ul>
+</div>
 </div>
 </div>
 </div>
@@ -2041,8 +1941,7 @@ resource distribution, blackout length, or individual impacts.</p></li>
 <hr />
 <ol>
 <li id="fn1"><p><a href="https://en.wikipedia.org/wiki/2021_Texas_power_crisis" class="uri">https://en.wikipedia.org/wiki/2021_Texas_power_crisis</a><a href="#fnref1" class="footnote-back">↩︎</a></p></li>
-<li id="fn2"><p>Wikipedia. 2021. “2021 Texas power crisis.” Last
-modified October 2, 2021. <a href="https://en.wikipedia.org/wiki/2021_Texas_power_crisis" class="uri">https://en.wikipedia.org/wiki/2021_Texas_power_crisis</a>.<a href="#fnref2" class="footnote-back">↩︎</a></p></li>
+<li id="fn2"><p><a href="https://developers.google.com/earth-engine/datasets/catalog/NOAA_VIIRS_001_VNP46A1" class="uri">https://developers.google.com/earth-engine/datasets/catalog/NOAA_VIIRS_001_VNP46A1</a><a href="#fnref2" class="footnote-back">↩︎</a></p></li>
 </ol>
 </div>
 
