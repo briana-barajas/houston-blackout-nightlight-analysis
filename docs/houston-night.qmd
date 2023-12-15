@@ -247,15 +247,47 @@ glue::glue('Number of unimpacted census tracts in Houston area: {nrow(unimpacted
 **Mapping income of areas impacted and impacted by blackouts:**
 
 ```{r}
+# create map using separate income df's
 tm_shape(impacted) +
-  tm_fill(fill = 'median_income', palette = c('#d0f2f7', '#20a6bc'),
+  tm_fill(fill = 'median_income', palette = c('#d0f2f7', '#20a6bc'), #fill by inc, impacted
           title = "Median Income (Impacted)") +
   tm_lines(alpha = 0.4) +
   tm_shape(unimpacted) +
-  tm_fill(fill = 'median_income', palette = c('#d8efdd', '#5abd6f'),
+  tm_fill(fill = 'median_income', palette = c('#d8efdd', '#5abd6f'), #fill by inc, unimpacted
           title = "Median Income (Unimpacted)") +
   tm_lines(alpha = 0.4) +
-  tm_compass(type = "arrow", position = c("right", "top"), size = 2) +
-  tm_scale_bar()
+  tm_compass(type = "arrow", position = c("right", "top"), size = 2) + #add compass
+  tm_scale_bar() # add scalebar
 
 ```
+
+**Compare income distribution for all areas:**
+
+::: panel-tabset
+#### Impacted Distribution
+```{r}
+# calculate mean inc values
+impacted_mean <- mean(impacted$median_income, na.rm = TRUE)
+unimpacted_mean <- mean(unimpacted$median_income, na.rm = TRUE)
+
+# create hisograms of impacted and unimpacted income
+ggplot(data = unimpacted, aes(x=median_income)) +
+  geom_histogram(fill = '#5abd6f', bins = 50) +
+  labs(title = "Income - Areas Unimpacted by Blackouts",
+       x="Median Income",
+       y="Frequency") +
+  theme_minimal() +
+  geom_vline(xintercept = unimpacted_mean)
+```
+
+#### Unimpacted Distribution
+```{r}
+ggplot(data = impacted, aes(x=median_income)) +
+  geom_histogram(fill = '#20a6bc', bins = 50) +
+  labs(title = "Income - Areas Impacted by Blackouts",
+       x="Median Income",
+       y="Frequency") +
+  theme_minimal() +
+  geom_vline(xintercept = impacted_mean)
+```
+:::
