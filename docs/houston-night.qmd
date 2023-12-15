@@ -163,6 +163,9 @@ light_diff_reclassified[light_diff_reclassified == "No Blackout"] <- NA
 # convert blackout mask from raster to vector
 lights_bo_mask <- st_as_sf(light_diff_reclassified) %>% #vectorize
   st_make_valid() #fix invalid geometries
+
+# check that only areas w/blackouts were included
+unique(lights_bo_mask$VNP46A1.A2021038.h08v05.001.2021039064328.tif)
 ```
 
 **Crop mask to area of interest (Houston):**
@@ -179,7 +182,9 @@ houston_polygon <- st_sfc(st_polygon(list(houston_matrix)) #create polygon using
 # crop blackout (bo) mask using houston polygon
 houston_lights_bo_mask <- st_crop(lights_bo_mask, st_bbox(houston_polygon)) %>%
   st_transform(crs = "EPSG:3083") #update crs to match all data
-  
+
+# check if CRS are the same
+st_crs(houston_polygon) == st_crs(lights_bo_mask)
 ```
 
 **Exclude ares within 200m of highways:**
@@ -190,6 +195,10 @@ hwy_buffer <- st_union(st_buffer(x = highway_raw, dist = 200))
 
 # isolate blackout areas further than 200m from highway (apply buffer)
 bo_areas <- st_difference(houston_lights_bo_mask, hwy_buffer)
+
+# plot blackout areas to check if areas near highway are removed
+ggplot(bo_areas) +
+  geom_sf()
 
 # count number of blackout areas
 glue::glue('Blackout areas further than 200m away from a highway: {nrow(bo_areas)}')
@@ -264,7 +273,7 @@ tm_shape(impacted) +
 **Compare income distribution for all areas:**
 
 ::: panel-tabset
-#### Impacted Distribution
+#### Unimpacted Distribution
 ```{r}
 # calculate mean inc values
 impacted_mean <- mean(impacted$median_income, na.rm = TRUE)
@@ -280,7 +289,7 @@ ggplot(data = unimpacted, aes(x=median_income)) +
   geom_vline(xintercept = unimpacted_mean)
 ```
 
-#### Unimpacted Distribution
+#### Impacted Distribution
 ```{r}
 ggplot(data = impacted, aes(x=median_income)) +
   geom_histogram(fill = '#20a6bc', bins = 50) +
@@ -291,3 +300,10 @@ ggplot(data = impacted, aes(x=median_income)) +
   geom_vline(xintercept = impacted_mean)
 ```
 :::
+
+## Conclusion
+This study uses aerial images of night lights in Houston to asses blackouts caused by a winter storm in February 2021. The difference in radiance between a night before and during the storm was used to determine areas where blackouts occurred. In order to improve this estimate, areas within 200m of highways were removed to avoid designating more rural areas as having had blackouts. Finally, homes in blackout areas were combined with data on the corresponding census tract and median income. Based on the distribution, displayed above, there does not appear to be a clear relationship between median income and whether or not an area experienced a blackout. 
+  
+This study provides a meaningful preliminary exploration on the relationship socioeconomic factors and the 2021 winter storm blackouts, but more work could be done. Using changes in night lights from two nights does not tell us about potential disparities regarding emergency resource distribution, blackout length, or individual impacts. It is also possible that the radiance difference chosen does not appropriated capture all impacted areas.
+
+
