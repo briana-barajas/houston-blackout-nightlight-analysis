@@ -7,7 +7,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
 
 <meta name="author" content="Briana Barajas">
-<meta name="dcterms.date" content="2023-12-14">
+<meta name="dcterms.date" content="2023-12-15">
 
 <title>Assessing Inequities During 2021 Houston Blackout</title>
 <style>
@@ -127,7 +127,7 @@ code span.wa { color: #60a0b0; font-weight: bold; font-style: italic; } /* Warni
     <div>
     <div class="quarto-title-meta-heading">Published</div>
     <div class="quarto-title-meta-contents">
-      <p class="date">December 14, 2023</p>
+      <p class="date">December 15, 2023</p>
     </div>
   </div>
   
@@ -364,6 +364,7 @@ code span.wa { color: #60a0b0; font-weight: bold; font-style: italic; } /* Warni
 <section id="incorporating-socioeconomic-factors" class="level2">
 <h2 class="anchored" data-anchor-id="incorporating-socioeconomic-factors">Incorporating Socioeconomic Factors</h2>
 <p>The final step is to assign socioeconomic data to the 157410 homes in the Houston area that have experienced blackouts.</p>
+<p><strong>Finding census tracts impacted by blackout:</strong></p>
 <div class="cell">
 <details>
 <summary>View Code</summary>
@@ -373,13 +374,85 @@ code span.wa { color: #60a0b0; font-weight: bold; font-style: italic; } /* Warni
 <span id="cb14-4"><a href="#cb14-4" aria-hidden="true" tabindex="-1"></a><span class="co"># calculate mean median income for each census tract</span></span>
 <span id="cb14-5"><a href="#cb14-5" aria-hidden="true" tabindex="-1"></a>inc_tract_joined <span class="ot">&lt;-</span> inc_tract_joined <span class="sc">%&gt;%</span></span>
 <span id="cb14-6"><a href="#cb14-6" aria-hidden="true" tabindex="-1"></a>  <span class="fu">group_by</span>(census_tract) <span class="sc">%&gt;%</span></span>
-<span id="cb14-7"><a href="#cb14-7" aria-hidden="true" tabindex="-1"></a>  <span class="fu">summarise</span>(<span class="at">median_income =</span> <span class="fu">mean</span>(median_income, <span class="at">na.rm =</span> <span class="cn">TRUE</span>))</span>
-<span id="cb14-8"><a href="#cb14-8" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb14-9"><a href="#cb14-9" aria-hidden="true" tabindex="-1"></a><span class="co"># spatially join home home data with census data</span></span>
-<span id="cb14-10"><a href="#cb14-10" aria-hidden="true" tabindex="-1"></a><span class="co">#full_bo_data &lt;- st_filter(x = bo_homes, y = inc_tract_joined, .predicate = st_intersects)</span></span>
-<span id="cb14-11"><a href="#cb14-11" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb14-12"><a href="#cb14-12" aria-hidden="true" tabindex="-1"></a><span class="co"># count number of census tracts that were impacted</span></span>
-<span id="cb14-13"><a href="#cb14-13" aria-hidden="true" tabindex="-1"></a><span class="co">#glue::glue('Number of impacted census tracts: {nrow(full_bo_data)}')</span></span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<span id="cb14-7"><a href="#cb14-7" aria-hidden="true" tabindex="-1"></a>  <span class="fu">summarise</span>(<span class="at">median_income =</span> <span class="fu">mean</span>(median_income, <span class="at">na.rm =</span> <span class="cn">TRUE</span>)) <span class="sc">%&gt;%</span> </span>
+<span id="cb14-8"><a href="#cb14-8" aria-hidden="true" tabindex="-1"></a>  <span class="fu">st_as_sf</span>()</span>
+<span id="cb14-9"><a href="#cb14-9" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb14-10"><a href="#cb14-10" aria-hidden="true" tabindex="-1"></a><span class="co"># spatially join home home data with census data</span></span>
+<span id="cb14-11"><a href="#cb14-11" aria-hidden="true" tabindex="-1"></a>impacted <span class="ot">&lt;-</span> <span class="fu">st_filter</span>(<span class="at">x =</span> inc_tract_joined, <span class="at">y =</span> bo_homes, <span class="at">.predicate =</span> st_intersects)</span>
+<span id="cb14-12"><a href="#cb14-12" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb14-13"><a href="#cb14-13" aria-hidden="true" tabindex="-1"></a><span class="co"># count number of census tracts that were impacted</span></span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+</details>
+</div>
+<div class="cell">
+<details>
+<summary>View Code</summary>
+<div class="sourceCode cell-code" id="cb15"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb15-1"><a href="#cb15-1" aria-hidden="true" tabindex="-1"></a><span class="co"># drop geometries for faster anti-join</span></span>
+<span id="cb15-2"><a href="#cb15-2" aria-hidden="true" tabindex="-1"></a>impacted_no_geom <span class="ot">&lt;-</span> impacted <span class="sc">%&gt;%</span> <span class="fu">st_drop_geometry</span>()</span>
+<span id="cb15-3"><a href="#cb15-3" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb15-4"><a href="#cb15-4" aria-hidden="true" tabindex="-1"></a><span class="co"># antijoin to find areas NOT impacted by black out</span></span>
+<span id="cb15-5"><a href="#cb15-5" aria-hidden="true" tabindex="-1"></a>unimpacted <span class="ot">&lt;-</span> <span class="fu">anti_join</span>(<span class="at">x =</span> inc_tract_joined, <span class="at">y =</span> impacted_no_geom, <span class="at">by =</span> <span class="st">"census_tract"</span>)</span>
+<span id="cb15-6"><a href="#cb15-6" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb15-7"><a href="#cb15-7" aria-hidden="true" tabindex="-1"></a><span class="co"># crop unimpacted areas to Houston polygon</span></span>
+<span id="cb15-8"><a href="#cb15-8" aria-hidden="true" tabindex="-1"></a>houston_polygon <span class="ot">&lt;-</span> <span class="fu">st_transform</span>(houston_polygon, <span class="at">crs =</span> <span class="st">"EPSG:3083"</span>) <span class="co">#update polygon CRS</span></span>
+<span id="cb15-9"><a href="#cb15-9" aria-hidden="true" tabindex="-1"></a>unimpacted <span class="ot">&lt;-</span> <span class="fu">st_crop</span>(unimpacted, houston_polygon) <span class="co">#crop unimpacted areas</span></span>
+<span id="cb15-10"><a href="#cb15-10" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb15-11"><a href="#cb15-11" aria-hidden="true" tabindex="-1"></a><span class="co"># count impacted and unimpacted census tracts</span></span>
+<span id="cb15-12"><a href="#cb15-12" aria-hidden="true" tabindex="-1"></a>glue<span class="sc">::</span><span class="fu">glue</span>(<span class="st">'Number of impacted census tracts in Houston area: {nrow(impacted)}'</span>)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+</details>
+<div class="cell-output cell-output-stdout">
+<pre><code>Number of impacted census tracts in Houston area: 754</code></pre>
+</div>
+<details>
+<summary>View Code</summary>
+<div class="sourceCode cell-code" id="cb17"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb17-1"><a href="#cb17-1" aria-hidden="true" tabindex="-1"></a>glue<span class="sc">::</span><span class="fu">glue</span>(<span class="st">'Number of unimpacted census tracts in Houston area: {nrow(unimpacted)}'</span>)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+</details>
+<div class="cell-output cell-output-stdout">
+<pre><code>Number of unimpacted census tracts in Houston area: 373</code></pre>
+</div>
+</div>
+<p><strong>Mapping income of areas impacted and impacted by blackouts:</strong></p>
+<div class="cell">
+<details>
+<summary>View Code</summary>
+<div class="sourceCode cell-code" id="cb19"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb19-1"><a href="#cb19-1" aria-hidden="true" tabindex="-1"></a><span class="co"># combine data, adding binary column for bo status</span></span>
+<span id="cb19-2"><a href="#cb19-2" aria-hidden="true" tabindex="-1"></a>impacted <span class="ot">&lt;-</span> impacted <span class="sc">%&gt;%</span> <span class="fu">mutate</span>(<span class="at">blackout_status =</span> <span class="st">"Impacted"</span>)</span>
+<span id="cb19-3"><a href="#cb19-3" aria-hidden="true" tabindex="-1"></a>unimpacted <span class="ot">&lt;-</span> unimpacted <span class="sc">%&gt;%</span> <span class="fu">mutate</span>(<span class="at">blackout_status =</span> <span class="st">"Unimpacted"</span>)</span>
+<span id="cb19-4"><a href="#cb19-4" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb19-5"><a href="#cb19-5" aria-hidden="true" tabindex="-1"></a><span class="co"># combine data</span></span>
+<span id="cb19-6"><a href="#cb19-6" aria-hidden="true" tabindex="-1"></a>full_bo_data <span class="ot">&lt;-</span> <span class="fu">rbind</span>(impacted, unimpacted)</span>
+<span id="cb19-7"><a href="#cb19-7" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb19-8"><a href="#cb19-8" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb19-9"><a href="#cb19-9" aria-hidden="true" tabindex="-1"></a><span class="co"># </span></span>
+<span id="cb19-10"><a href="#cb19-10" aria-hidden="true" tabindex="-1"></a><span class="co"># impacted_map &lt;- ggplot() +</span></span>
+<span id="cb19-11"><a href="#cb19-11" aria-hidden="true" tabindex="-1"></a><span class="co">#   geom_sf(data = impacted, aes(fill = median_income)) +</span></span>
+<span id="cb19-12"><a href="#cb19-12" aria-hidden="true" tabindex="-1"></a><span class="co">#   scale_fill_gradient(low = '#D5F5E3', high = '#186A3B') +</span></span>
+<span id="cb19-13"><a href="#cb19-13" aria-hidden="true" tabindex="-1"></a><span class="co">#   labs(fill = "Median Income (Impacted)") +</span></span>
+<span id="cb19-14"><a href="#cb19-14" aria-hidden="true" tabindex="-1"></a><span class="co">#   theme_minimal()</span></span>
+<span id="cb19-15"><a href="#cb19-15" aria-hidden="true" tabindex="-1"></a><span class="co"># </span></span>
+<span id="cb19-16"><a href="#cb19-16" aria-hidden="true" tabindex="-1"></a><span class="co"># impacted_map +</span></span>
+<span id="cb19-17"><a href="#cb19-17" aria-hidden="true" tabindex="-1"></a><span class="co">#   geom_sf(data = unimpacted, aes(fill = median_inc)) +</span></span>
+<span id="cb19-18"><a href="#cb19-18" aria-hidden="true" tabindex="-1"></a><span class="co">#   scale_fill_gradient(low = '#FDE9F4', high = '#8C0D50') +</span></span>
+<span id="cb19-19"><a href="#cb19-19" aria-hidden="true" tabindex="-1"></a><span class="co">#   labs(fill = "Median Income (Unimpacted)")</span></span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+</details>
+</div>
+<div class="cell">
+<details>
+<summary>View Code</summary>
+<div class="sourceCode cell-code" id="cb20"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb20-1"><a href="#cb20-1" aria-hidden="true" tabindex="-1"></a><span class="fu">ggplot</span>() <span class="sc">+</span></span>
+<span id="cb20-2"><a href="#cb20-2" aria-hidden="true" tabindex="-1"></a>  <span class="fu">geom_sf</span>(<span class="at">data =</span> houston_basemap, <span class="fu">aes</span>(<span class="at">fill =</span> median_income)) <span class="sc">+</span> <span class="co">#color by inc data</span></span>
+<span id="cb20-3"><a href="#cb20-3" aria-hidden="true" tabindex="-1"></a>  <span class="fu">scale_fill_gradient</span>(<span class="at">low =</span> <span class="st">'#D5F5E3'</span>, <span class="at">high =</span> <span class="st">'#186A3B'</span>) <span class="sc">+</span> <span class="co">#set low+high inc gradient</span></span>
+<span id="cb20-4"><a href="#cb20-4" aria-hidden="true" tabindex="-1"></a>  <span class="fu">labs</span>(<span class="at">fill =</span> <span class="st">"Median Icome"</span>,</span>
+<span id="cb20-5"><a href="#cb20-5" aria-hidden="true" tabindex="-1"></a>       <span class="at">title =</span> <span class="st">"2021 Houston Winter Storm Blackout Areas"</span>) <span class="sc">+</span></span>
+<span id="cb20-6"><a href="#cb20-6" aria-hidden="true" tabindex="-1"></a>  <span class="fu">geom_sf</span>(<span class="at">data =</span> full_bo_data, <span class="at">color =</span> <span class="st">'#8C0D50'</span>, <span class="at">alpha =</span> <span class="fl">0.2</span>) <span class="sc">+</span> <span class="co">#add bo areas</span></span>
+<span id="cb20-7"><a href="#cb20-7" aria-hidden="true" tabindex="-1"></a>  <span class="fu">annotation_scale</span>(<span class="at">pad_x =</span> <span class="fu">unit</span>(<span class="fl">8.4</span>, <span class="st">'cm'</span>), <span class="co">#add scale, adjust size and position</span></span>
+<span id="cb20-8"><a href="#cb20-8" aria-hidden="true" tabindex="-1"></a>                   <span class="at">pad_y =</span> <span class="fu">unit</span>(<span class="fl">0.5</span>, <span class="st">'cm'</span>),</span>
+<span id="cb20-9"><a href="#cb20-9" aria-hidden="true" tabindex="-1"></a>                   <span class="at">height =</span> <span class="fu">unit</span>(<span class="fl">0.2</span>, <span class="st">'cm'</span>)) <span class="sc">+</span></span>
+<span id="cb20-10"><a href="#cb20-10" aria-hidden="true" tabindex="-1"></a>  <span class="fu">annotation_north_arrow</span>(<span class="at">height =</span> <span class="fu">unit</span>(<span class="fl">0.7</span>, <span class="st">'cm'</span>), <span class="co">#add arrow, adjust size and position</span></span>
+<span id="cb20-11"><a href="#cb20-11" aria-hidden="true" tabindex="-1"></a>                         <span class="at">width =</span> <span class="fu">unit</span>(<span class="fl">0.7</span>, <span class="st">'cm'</span>),</span>
+<span id="cb20-12"><a href="#cb20-12" aria-hidden="true" tabindex="-1"></a>                         <span class="at">pad_x =</span> <span class="fu">unit</span>(<span class="fl">11.2</span>, <span class="st">"cm"</span>),</span>
+<span id="cb20-13"><a href="#cb20-13" aria-hidden="true" tabindex="-1"></a>                         <span class="at">pad_y =</span> <span class="fu">unit</span>(<span class="fl">9.5</span>, <span class="st">"cm"</span>)) <span class="sc">+</span></span>
+<span id="cb20-14"><a href="#cb20-14" aria-hidden="true" tabindex="-1"></a>  <span class="fu">theme_minimal</span>() <span class="sc">+</span> <span class="co">#change theme, lighten graticultes</span></span>
+<span id="cb20-15"><a href="#cb20-15" aria-hidden="true" tabindex="-1"></a>  <span class="fu">theme</span>(<span class="at">plot.title =</span> <span class="fu">element_text</span>(<span class="at">hjust =</span> <span class="fl">0.5</span>)) <span class="co">#center title</span></span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
 </details>
 </div>
 </section>
