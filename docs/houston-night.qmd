@@ -43,7 +43,7 @@ Data on individual homes is not available, but socioeconomic information from th
 library(tidyverse)
 library(stars)
 library(sf)
-library(ggspatial)
+library(tmap)
 library(gridExtra)
 library(here)
 ```
@@ -224,10 +224,9 @@ inc_tract_joined <- inc_tract_joined %>%
   st_as_sf()
 
 # spatially join home home data with census data
-impacted <- st_filter(x = inc_tract_joined, y = bo_homes, .predicate = st_intersects)
-
-# count number of census tracts that were impacted
-
+houston_polygon <- st_transform(houston_polygon, crs = "EPSG:3083") #update polygon CRS
+impacted <- st_filter(x = inc_tract_joined, y = bo_homes, .predicate = st_intersects) %>% 
+  st_crop(houston_polygon) #crop in case areas outside of Houston are present
 ```
 
 ```{r}
@@ -238,7 +237,6 @@ impacted_no_geom <- impacted %>% st_drop_geometry()
 unimpacted <- anti_join(x = inc_tract_joined, y = impacted_no_geom, by = "census_tract")
 
 # crop unimpacted areas to Houston polygon
-houston_polygon <- st_transform(houston_polygon, crs = "EPSG:3083") #update polygon CRS
 unimpacted <- st_crop(unimpacted, houston_polygon) #crop unimpacted areas
 
 # count impacted and unimpacted census tracts
@@ -249,41 +247,15 @@ glue::glue('Number of unimpacted census tracts in Houston area: {nrow(unimpacted
 **Mapping income of areas impacted and impacted by blackouts:**
 
 ```{r}
-# combine data, adding binary column for bo status
-impacted <- impacted %>% mutate(blackout_status = "Impacted")
-unimpacted <- unimpacted %>% mutate(blackout_status = "Unimpacted")
+tm_shape(impacted) +
+  tm_fill(fill = 'median_income', palette = c('#d0f2f7', '#20a6bc'),
+          title = "Median Income (Impacted)") +
+  tm_lines(alpha = 0.4) +
+  tm_shape(unimpacted) +
+  tm_fill(fill = 'median_income', palette = c('#d8efdd', '#5abd6f'),
+          title = "Median Income (Unimpacted)") +
+  tm_lines(alpha = 0.4) +
+  tm_compass(type = "arrow", position = c("right", "top"), size = 2) +
+  tm_scale_bar()
 
-# combine data
-full_bo_data <- rbind(impacted, unimpacted)
-
-
-# 
-# impacted_map <- ggplot() +
-#   geom_sf(data = impacted, aes(fill = median_income)) +
-#   scale_fill_gradient(low = '#D5F5E3', high = '#186A3B') +
-#   labs(fill = "Median Income (Impacted)") +
-#   theme_minimal()
-# 
-# impacted_map +
-#   geom_sf(data = unimpacted, aes(fill = median_inc)) +
-#   scale_fill_gradient(low = '#FDE9F4', high = '#8C0D50') +
-#   labs(fill = "Median Income (Unimpacted)")
-```
-
-```{r, eval=FALSE}
-ggplot() +
-  geom_sf(data = houston_basemap, aes(fill = median_income)) + #color by inc data
-  scale_fill_gradient(low = '#D5F5E3', high = '#186A3B') + #set low+high inc gradient
-  labs(fill = "Median Icome",
-       title = "2021 Houston Winter Storm Blackout Areas") +
-  geom_sf(data = full_bo_data, color = '#8C0D50', alpha = 0.2) + #add bo areas
-  annotation_scale(pad_x = unit(8.4, 'cm'), #add scale, adjust size and position
-                   pad_y = unit(0.5, 'cm'),
-                   height = unit(0.2, 'cm')) +
-  annotation_north_arrow(height = unit(0.7, 'cm'), #add arrow, adjust size and position
-                         width = unit(0.7, 'cm'),
-                         pad_x = unit(11.2, "cm"),
-                         pad_y = unit(9.5, "cm")) +
-  theme_minimal() + #change theme, lighten graticultes
-  theme(plot.title = element_text(hjust = 0.5)) #center title
 ```
